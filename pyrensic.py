@@ -1,85 +1,87 @@
 import argparse
 import subprocess
 import os
-import pytsk3
+
+def run_command(command, get_output=False):
+    """Executes a command, optionally returning its output."""
+    try:
+        if get_output:
+            result = subprocess.run(command, shell=True, text=True, capture_output=True, check=True)
+            return result.stdout
+        else:
+            subprocess.run(command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while running command: {e.cmd}")
+        print(e.stderr)
+        return None
+
+def get_ewf_info(image_path):
+    """Displays information about the EWF image."""
+    return run_command(f"ewfinfo {image_path}", get_output=True)
 
 def mount_ewf(image_path, mount_point):
-    """
-    Mounts an EWF image using pyEWFmount at a specified mount point.
-    """
+    """Mounts an EWF image using ewfmount and checks for success."""
     if not os.path.exists(mount_point):
         os.makedirs(mount_point)
+        print(f"Mount point {mount_point} created.")
     
-    # Mount command
-    mount_command = f"sudo pyEWFmount -i {image_path} -o {mount_point}"
-    subprocess.run(mount_command, shell=True, check=True)
-    print(f"EWF image mounted at {mount_point}")
+    # Running ewfmount command
+    result = run_command(f"sudo ewfmount {image_path} {mount_point}", get_output=True)
+    if result and 'ewfmount' in result:
+        print(f"EWF image mounted at {mount_point}")
+        mounted_path = os.path.join(mount_point, 'ewf1')
+        if os.path.exists(mounted_path):
+            return mounted_path  # Only return path if the mount was definitively successful
+        else:
+            print("Mount successful but expected mount output not found.")
+    return None
 
-def unmount_ewf(mount_point):
-    """
-    Unmounts the EWF image from the mount point.
-    """
-    unmount_command = f"sudo umount {mount_point}"
-    subprocess.run(unmount_command, shell=True, check=True)
-    print("EWF image unmounted")
 
-def list_files_in_partition(mount_point):
-    """
-    List files using pytsk3 by navigating the file system.
-    """
-    img_info = pytsk3.Img_Info(f'ewf:{mount_point}')
-    filesystem = pytsk3.FS_Info(img_info)
-    directory = filesystem.open_dir(path="/")
-    
-    print("Files in the filesystem:")
-    for entry in directory:
-        print(entry.info.name.name)
+def list_disk_structure(mount_point):
+    """Lists the partition structure of the mounted EWF image."""
+    return run_command(f"sudo fdisk -l {mount_point}/ewf1", get_output=True)
 
-def extract_and_analyze_file(filesystem, file_path, output_path, report_path=None):
-    """
-    Extracts a specific file and potentially analyzes it with RegRipper.
-    """
-    try:
-        file_object = filesystem.open(file_path)
-        with open(output_path, 'wb') as output_file:
-            file_data = file_object.read_random(0, file_object.info.meta.size)
-            output_file.write(file_data)
-        print(f"File extracted to {output_path}")
-
-        if report_path:
-            run_regripper(output_path, report_path)
-
-    except IOError as e:
-        print(f"Error opening file {file_path}: {e}")
-
-def run_regripper(reg_file_path, report_path):
-    """
-    Runs RegRipper on the extracted registry file.
-    """
-    regripper_cmd = f"perl rip.pl -r {reg_file_path} -f all > {report_path}"
-    subprocess.run(regripper_cmd, shell=True, check=True)
-    print(f"RegRipper report generated at {report_path}")
+def mount_partition(offset, source, mount_point):
+    """Mounts a specific partition from an EWF image based on the given offset."""
+    if not os.path.exists(mount_point):
+        os.makedirs(mount_point)
+    mount_cmd = f"sudo mount -o ro,norecovery,loop,offset={offset} {source} {mount_point}"
+    return run_command(mount_cmd)
 
 def main():
     parser = argparse.ArgumentParser(description="Forensic Data Extraction Tool")
     parser.add_argument("image_path", help="Path to the EWF image")
-    parser.add_argument("mount_point", help="Mount point for the EWF image")
-    parser.add_argument("--extract_file", help="File path within the image to extract")
-    parser.add_argument("--output_path", help="Local path to save the extracted file")
-    parser.add_argument("--report_path", help="Local path to save the RegRipper report", default=None)
+    parser.add_argument("ewf_mount_point", help="Mount point for the EWF image")
+    parser.add_argument("raw_mount_point", help="Mount point for the raw image")
     args = parser.parse_args()
 
-    mount_ewf(args.image_path, args.mount_point)
+    # Get information about the EWF image
+    ewf_info = get_ewf_info(args.image_path)
+    if ewf_info:
+        print("EWF Information:")
+        print(ewf_info)
+    # Mount the EWF image
+    if mount_ewf(args.image_path, args.ewf_mount_point):
+        print(f"EWF image mounted at {args.ewf_mount_point}")
+        
+        # List disk structure
+        disk_structure = list_disk_structure(args.ewf_mount_point)
+        if disk_structure:
+            print("Disk Structure:")
+            print(disk_structure)
 
-    try:
-        if args.extract_file and args.output_path:
-            img_info = pytsk3.Img_Info(f'ewf:{args.mount_point}')
-            filesystem = pytsk3.FS_Info(img_info)
-            extract_and_analyze_file(filesystem, args.extract_file, args.output_path, args.report_path)
-        else:
-            list_files_in_partition(args.mount_point)
-    finally:
-        unmount_ewf(args.mount_point)
+            # Calculate offset for the partition to mount (example calculation provided)
+            # Adjust based on actual disk structure output parsing
+            sector_offset = 489472  # This should be parsed from `disk_structure`
+            byte_offset = sector_offset * 512
+            if mount_partition(byte_offset, f"{args.ewf_mount_point}/ewf1", args.raw_mount_point):
+                print(f"Partition mounted at {args.raw_mount_point}")
+
+                # Further operations such as RegRipper can be performed here
+
+        # Unmount EWF after operations are done
+        run_command(f"sudo umount {args.ewf_mount_point}")
+        print(f"EWF image unmounted from {args.ewf_mount_point}")
 
 if __name__ == "__main__":
     main()
