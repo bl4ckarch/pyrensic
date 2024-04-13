@@ -88,9 +88,9 @@ def analyze_hive(hive_path, hive_type, output_file, regripper_path):
     """Provides the command to run RegRipper manually."""
     if os.path.exists(hive_path):
         if hive_type == "ntuser":
-            command = f"perl {regripper_path}/rip.pl -r {hive_path} -a > {output_file}"
+            command = f"{regripper_path}/rip.pl -r {hive_path} -a > {output_file}"
         else:
-            command = f"perl {regripper_path}/rip.pl -r {hive_path} -f {hive_type} > {output_file}"
+            command = f"{regripper_path}/rip.pl -r {hive_path} -f {hive_type} > {output_file}"
         print(f"To analyze the {hive_type} hive, run the following command:")
         print(command)
     else:
