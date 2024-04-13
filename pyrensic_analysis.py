@@ -1,5 +1,54 @@
+#!/usr/bin/env python3
+# File name          : pyrensic_analysis.py
+# Author             : bl4ckarch
+# Date created       : 13 avril 2024
+
 import os
 import subprocess
+import sys
+import logging
+class CustomColors:
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    CYAN = '\033[36m'
+    RESET = '\033[0m'
+    BOLD = '\033[01m'
+    PURPLE = '\033[95m'
+
+# Custom formatter with color support
+class CustomFormatter(logging.Formatter):
+    format_dict = {
+        logging.DEBUG: CustomColors.CYAN + "[DEBUG] " + CustomColors.RESET,
+        logging.INFO: CustomColors.GREEN + "[INFO] " + CustomColors.RESET,
+        logging.WARNING: CustomColors.YELLOW + "[WARNING] " + CustomColors.RESET,
+        logging.ERROR: CustomColors.RED + "[ERROR] " + CustomColors.RESET,
+        logging.CRITICAL: CustomColors.PURPLE + "[CRITICAL] " + CustomColors.RESET
+    }
+
+    def format(self, record):
+        log_fmt = self.format_dict.get(record.levelno)
+        formatter = logging.Formatter('%(asctime)s ' + log_fmt + '%(message)s', "%Y-%m-%d %H:%M:%S")
+        return formatter.format(record)
+    
+handler = logging.StreamHandler()
+handler.setFormatter(CustomFormatter())
+logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+
+def pop_err(text):
+    logging.error(text)
+    sys.exit()
+
+def pop_dbg(text):
+    logging.debug(text)
+
+def pop_info(text):
+    logging.info(text)
+
+def pop_valid(text):
+    logging.info(text)
+
+
 
 def run_command(command):
     """Executes a command and returns the output."""

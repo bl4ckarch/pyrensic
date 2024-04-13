@@ -1,6 +1,56 @@
+#!/usr/bin/env python3
+# File name          : pyrensic.py
+# Author             : bl4ckarch
+# Date created       : 13 avril 2024
+
+
+
 import argparse
 import subprocess
 import os
+import logging
+import sys
+class CustomColors:
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    CYAN = '\033[36m'
+    RESET = '\033[0m'
+    BOLD = '\033[01m'
+    PURPLE = '\033[95m'
+
+# Custom formatter with color support
+class CustomFormatter(logging.Formatter):
+    format_dict = {
+        logging.DEBUG: CustomColors.CYAN + "[DEBUG] " + CustomColors.RESET,
+        logging.INFO: CustomColors.GREEN + "[INFO] " + CustomColors.RESET,
+        logging.WARNING: CustomColors.YELLOW + "[WARNING] " + CustomColors.RESET,
+        logging.ERROR: CustomColors.RED + "[ERROR] " + CustomColors.RESET,
+        logging.CRITICAL: CustomColors.PURPLE + "[CRITICAL] " + CustomColors.RESET
+    }
+
+    def format(self, record):
+        log_fmt = self.format_dict.get(record.levelno)
+        formatter = logging.Formatter('%(asctime)s ' + log_fmt + '%(message)s', "%Y-%m-%d %H:%M:%S")
+        return formatter.format(record)
+    
+handler = logging.StreamHandler()
+handler.setFormatter(CustomFormatter())
+logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+
+def pop_err(text):
+    logging.error(text)
+    sys.exit()
+
+def pop_dbg(text):
+    logging.debug(text)
+
+def pop_info(text):
+    logging.info(text)
+
+def pop_valid(text):
+    logging.info(text)
+
 
 def run_command(command, get_output=False):
     """Executes a command and returns the output if successful, or None on failure."""
@@ -8,7 +58,7 @@ def run_command(command, get_output=False):
         result = subprocess.run(command, shell=True, text=True, capture_output=True, check=True)
         return result.stdout if get_output else None
     except subprocess.CalledProcessError as e:
-        print(f"An error occurred while running command: {e.cmd}")
+        pop_err(f"An error occurred while running command: {e.cmd}")
         print(e.stderr)
         return None
 
@@ -16,9 +66,9 @@ def setup_mount_point(mount_point, username):
     """Ensures the mount point exists and is owned by the specified user."""
     if not os.path.exists(mount_point):
         os.makedirs(mount_point)
-        print(f"Mount point {mount_point} created.")
+        pop_info(f"Mount point {mount_point} created.")
     run_command(f"sudo chown {username} {mount_point}")
-    print(f"Ownership of {mount_point} changed to {username}.")
+    pop_valid(f"Ownership of {mount_point} changed to {username}.")
 
 def mount_ewf(image_path, mount_point, username):
     """Mounts an EWF image using ewfmount."""
@@ -42,9 +92,9 @@ def list_disk_structure(disk_path):
 
 def get_user_input():
     """Gets the partition and offset input from the user."""
-    print("\nPlease enter the partition offset (in sectors):")
+    pop_dbg("\nPlease enter the partition offset (in sectors):")
     offset = input()
-    print("Please enter the mount point for the raw image:")
+    pop_dbg("Please enter the mount point for the raw image:")
     mount_point = input()
     return offset, mount_point
 
@@ -52,7 +102,7 @@ def mount_partition(offset, source, mount_point):
     """Mounts a specific partition from an EWF image based on the given offset."""
     mount_cmd = f"sudo mount -o ro,norecovery,loop,offset=$(({offset}*512)) {source} {mount_point}"
     if run_command(mount_cmd):
-        print(f"Partition mounted at {mount_point}")
+        pop_info(f"Partition mounted at {mount_point}")
 
 def main():
     parser = argparse.ArgumentParser(description="Forensic Data Extraction Tool")
@@ -66,12 +116,12 @@ def main():
         try:
             disk_structure = list_disk_structure(disk_path)
             if disk_structure:
-                print("Disk Structure:")
-                print(disk_structure)
+                pop_info("Disk Structure:")
+                pop_info(disk_structure)
                 offset, raw_mount_point = get_user_input()
                 mount_partition(offset, disk_path, raw_mount_point)
             # Wait for user to manually request unmounting
-            print(f"Now run the pyrensic_analysic.py and use {args.ewf_mount_point} mount point when prompted for further analysis")
+            pop_valid(f"Now run the pyrensic_analysic.py and use {args.ewf_mount_point} mount point when prompted for further analysis")
             while True:
                 command = input("Type 'unmount' to unmount the EWF and exit, or 'continue' to keep working: ").lower()
                 if command == "unmount":
