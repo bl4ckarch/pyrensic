@@ -1,5 +1,5 @@
 # pyrensic
-This Tool is a Forensic Analysis Tool
+This Tool is a Forensic Analysis Tool (University Project)
 
 ## Overview
 
